@@ -30,18 +30,18 @@
       visibility: hidden;
     }
 
-    /* Blurred backdrop copy fills the whole screen, no awkward crop feel */
+    /* Blurred backdrop — fills screen, heavily blurred + darkened */
     #dragon-video-bg {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      filter: blur(30px) brightness(0.6) saturate(1.2);
-      transform: scale(1.15); /* hides blur edge artifacts */
+      filter: blur(50px) brightness(0.55) saturate(1.3);
+      transform: scale(1.3); /* hides blur edge artifacts, pulls in more glow */
     }
 
-    /* Sharp foreground video, centered, full width, no cropping */
+    /* Sharp foreground video */
     #dragon-video {
       position: absolute;
       top: 50%;
@@ -50,6 +50,23 @@
       height: auto;
       transform: translate(-50%, -50%);
       object-fit: contain;
+
+      /* KEY FIX: fade top/bottom edges to transparent so it blends
+         into the blurred background instead of a hard cut line */
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 12%,
+        black 88%,
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 12%,
+        black 88%,
+        transparent 100%
+      );
     }
 
     @media (orientation: landscape) {
@@ -57,6 +74,18 @@
         width: auto;
         height: 100%;
       }
+    }
+
+    /* Extra vignette to help hide any remaining seam and add mood */
+    #vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(
+        ellipse at center,
+        transparent 40%,
+        rgba(0,0,0,0.55) 100%
+      );
     }
 
     .hidden { opacity: 0; transition: opacity 1s ease-in; }
@@ -72,6 +101,7 @@
       <source src="dragon_intro.mp4" type="video/mp4">
       <source src="dragon_intro.webm" type="video/webm">
     </video>
+    <div id="vignette"></div>
   </div>
 
   <main id="main-content" class="hidden">
@@ -86,13 +116,19 @@
     const introOverlay = document.getElementById('intro-overlay');
     const mainContent = document.getElementById('main-content');
 
-    // Keep the blurred backdrop in sync with the main video
-    dragonVideo.addEventListener('play', () => dragonVideoBg.play());
-
     dragonVideo.muted = false;
     dragonVideo.play().catch(() => {
       dragonVideo.muted = true;
       dragonVideo.play();
+    });
+    dragonVideoBg.play();
+
+    // Keep bg video frame-synced to foreground video
+    // so the blur always matches the visible action
+    dragonVideo.addEventListener('timeupdate', () => {
+      if (Math.abs(dragonVideoBg.currentTime - dragonVideo.currentTime) > 0.15) {
+        dragonVideoBg.currentTime = dragonVideo.currentTime;
+      }
     });
 
     const enableAudio = () => {

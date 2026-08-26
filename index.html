@@ -38,20 +38,7 @@
   object-position: center;
 }
 /* Mobile Portrait Fix */
-@media screen and (max-width: 768px) and (orientation: portrait) {
-  #intro-overlay {
-    background-color: #0b0c0e;
-    overflow: hidden;
-  }
 
-  #dragon-video {
-    width: 100vw;
-    height: 100dvh;
-    object-fit: cover;
-    object-position: 25% center; /* Perfect sweet spot: keeps left wing & head in view */
-    transform: none;             /* Removes the extreme wing zoom */
-  }
-}
     #intro-overlay.fade-out {
       opacity: 0;
       visibility: hidden;

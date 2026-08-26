@@ -184,12 +184,12 @@
       hasEntered = true;
       dragonVideo.muted = false;
       dragonVideo.currentTime = 0;
-      dragonVideo.play();
+      dragonVideo.play().catch(err => console.error('Play failed:', err));
       tapToEnter.classList.add('hide');
       setTimeout(() => { tapToEnter.style.display = 'none'; }, 500);
     }
     tapToEnter.addEventListener('touchstart', enterWithSound, { passive: false });
-    tapToEnter.addEventListener('click', enterWithSound);
+   
     tapToEnter.addEventListener('touchstart', enterWithSound);
 
     // Only fade to main content once the REAL (post-tap) playback ends

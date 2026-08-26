@@ -80,7 +80,6 @@
       z-index: 2;
     }
 
-    /* Tap-to-enter screen — required so browsers allow sound to play */
     #tap-to-enter {
       position: absolute;
       inset: 0;
@@ -132,7 +131,7 @@
     <video id="dragon-video-bg" muted loop playsinline aria-hidden="true">
       <source src="dragon_intro.mp4" type="video/mp4">
     </video>
-    <video id="dragon-video" playsinline muted>
+    <video id="dragon-video" playsinline muted preload="auto">
       <source src="dragon_intro.mp4" type="video/mp4">
       <source src="dragon_intro.webm" type="video/webm">
     </video>
@@ -160,8 +159,18 @@
     const mainContent = document.getElementById('main-content');
     const tapToEnter = document.getElementById('tap-to-enter');
 
-    // Start silently in the background so both videos are buffered/ready
-    dragonVideo.play().catch(() => {});
+    let hasEntered = false; // guards against the 'ended' listener firing early
+
+    // Prime the video for mobile (forces buffering) WITHOUT letting it
+    // play through to completion before the user taps.
+    dragonVideo.play().then(() => {
+      dragonVideo.pause();
+      dragonVideo.currentTime = 0;
+    }).catch(() => {
+      // Some browsers block even muted play until interaction — that's fine,
+      // the tap-to-enter flow below still works.
+    });
+
     dragonVideoBg.play().catch(() => {});
 
     dragonVideo.addEventListener('timeupdate', () => {
@@ -171,6 +180,7 @@
     });
 
     function enterWithSound() {
+      hasEntered = true;
       dragonVideo.muted = false;
       dragonVideo.currentTime = 0;
       dragonVideo.play();
@@ -180,14 +190,16 @@
     tapToEnter.addEventListener('click', enterWithSound);
     tapToEnter.addEventListener('touchstart', enterWithSound);
 
+    // Only fade to main content once the REAL (post-tap) playback ends
     dragonVideo.addEventListener('ended', () => {
+      if (!hasEntered) return; // ignore the silent priming pass, if it ever fires
       introOverlay.classList.add('fade-out');
       mainContent.classList.remove('hidden');
       mainContent.classList.add('visible');
       setTimeout(() => { introOverlay.style.display = 'none'; }, 1000);
     });
 
-    /* ---------------- Realistic Ember / Fire Particle System ---------------- */
+    /* ---------------- Realistic Omnidirectional Ember System ---------------- */
     const canvas = document.getElementById('ember-canvas');
     const ctx = canvas.getContext('2d');
     let particles = [];
@@ -201,10 +213,9 @@
 
     function rand(min, max) { return Math.random() * (max - min) + min; }
 
-    // Hot-to-cool palette: white-gold core embers fade to deep orange/red as they rise & cool
-    const hotColors   = ['255,235,180', '255,215,130'];   // near-white gold (fresh, hot)
-    const midColors   = ['255,160,60', '255,130,40'];     // amber/orange (cooling)
-    const coolColors  = ['220,80,30', '180,50,20'];        // deep red-orange (dying ember)
+    const hotColors  = ['255,235,180', '255,215,130'];
+    const midColors  = ['255,160,60', '255,130,40'];
+    const coolColors = ['220,80,30', '180,50,20'];
 
     function pickColor(heat) {
       if (heat > 0.66) return hotColors[Math.floor(rand(0, hotColors.length))];
@@ -212,33 +223,41 @@
       return coolColors[Math.floor(rand(0, coolColors.length))];
     }
 
-    function createParticle(spawnAnywhere) {
-      const isBigEmber = Math.random() < 0.25; // some larger glowing chunks vs fine ash
+    function createParticle() {
+      const isBigEmber = Math.random() < 0.25;
       const size = isBigEmber ? rand(2.2, 4.5) : rand(0.6, 1.8);
-      const heat = rand(0.5, 1); // starts hot, cools over life
+      const heat = rand(0.5, 1);
+
+      // Base direction: mostly upward drift like rising heat, but with real
+      // variance — some particles drift sideways or even sink slightly,
+      // like ash caught in shifting air currents rather than a single stream.
+      const baseAngle = rand(-100, -80) * (Math.PI / 180); // roughly upward
+      const angleSpread = rand(-1.1, 1.1); // wide variance around that direction
+      const speed = isBigEmber ? rand(0.3, 0.9) : rand(0.5, 1.8);
+
       return {
         x: rand(0, canvas.width),
-        y: spawnAnywhere ? rand(0, canvas.height) : canvas.height + rand(0, 60),
+        y: rand(0, canvas.height),
         size,
-        speedY: isBigEmber ? rand(0.4, 1.0) : rand(0.8, 2.2),
-        drift: rand(-0.3, 0.3),
-        turbulence: rand(0.3, 1.2),
+        vx: Math.cos(baseAngle + angleSpread) * speed,
+        vy: Math.sin(baseAngle + angleSpread) * speed,
         turbPhase: rand(0, Math.PI * 2),
         turbSpeed: rand(0.015, 0.045),
+        turbulence: rand(0.3, 1.3),
         heat,
-        maxHeat: heat,
         opacity: rand(0.6, 1),
         flicker: rand(0.02, 0.08),
         isBigEmber,
+        driftHistory: 0,
         trail: isBigEmber ? rand(3, 7) : 0,
         life: 1,
-        decay: rand(0.0025, 0.006)
+        decay: rand(0.002, 0.005)
       };
     }
 
     const PARTICLE_COUNT = 90;
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particles.push(createParticle(true));
+      particles.push(createParticle());
     }
 
     function colorStr(rgb, alpha) {
@@ -249,10 +268,9 @@
       const rgb = pickColor(p.heat);
       const alpha = p.opacity * p.life;
 
-      // Motion trail for larger embers — short streak behind direction of travel
       if (p.isBigEmber && p.trail > 0) {
         const gradTrail = ctx.createLinearGradient(
-          p.x, p.y, p.x - p.driftHistory, p.y + p.trail * 2
+          p.x, p.y, p.x - p.driftHistory * 3, p.y - p.vy * 3
         );
         gradTrail.addColorStop(0, colorStr(rgb, alpha * 0.5));
         gradTrail.addColorStop(1, colorStr(rgb, 0));
@@ -260,11 +278,10 @@
         ctx.lineWidth = p.size * 0.6;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - (p.driftHistory || 0), p.y + p.trail * 2);
+        ctx.lineTo(p.x - p.driftHistory * 3, p.y - p.vy * 3);
         ctx.stroke();
       }
 
-      // Soft outer glow
       const glowSize = p.size * (p.isBigEmber ? 5 : 3.2);
       const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowSize);
       gradient.addColorStop(0, colorStr(rgb, alpha));
@@ -275,7 +292,6 @@
       ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bright hot core
       ctx.beginPath();
       ctx.fillStyle = colorStr(rgb, Math.min(1, alpha * 1.3));
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -283,29 +299,34 @@
     }
 
     function updateParticle(p) {
-      const prevX = p.x;
-      p.y -= p.speedY;
       p.turbPhase += p.turbSpeed;
-      p.x += Math.sin(p.turbPhase) * p.turbulence + p.drift;
-      p.driftHistory = p.x - prevX + p.drift;
 
-      // Cool down as it rises (heat -> color shifts hot to dark ember)
-      p.heat = Math.max(0, p.heat - 0.0015);
+      // Turbulent sideways sway layered on top of the base velocity —
+      // this is what makes it feel like real air movement instead of
+      // a straight line in one direction.
+      const swayX = Math.sin(p.turbPhase) * p.turbulence * 0.3;
+      const swayY = Math.cos(p.turbPhase * 0.7) * p.turbulence * 0.15;
 
-      // Natural flicker
+      const prevX = p.x;
+      p.x += p.vx + swayX;
+      p.y += p.vy + swayY;
+      p.driftHistory = p.x - prevX;
+
+      p.heat = Math.max(0, p.heat - 0.001);
       p.opacity += (Math.random() - 0.5) * p.flicker;
       p.opacity = Math.max(0.3, Math.min(1, p.opacity));
+      p.life -= p.decay;
 
-      // Fade near top of screen / random lifespan end
-      const fadeStart = canvas.height * 0.2;
-      if (p.y < fadeStart) {
-        p.life -= p.decay * 2;
-      } else {
-        p.life -= p.decay * 0.3;
-      }
+      // Wrap around ALL edges instead of only respawning from the bottom —
+      // particles can drift off any side and reappear on the opposite side,
+      // matching how scattered ash moves through a real scene.
+      if (p.x < -20) p.x = canvas.width + 20;
+      if (p.x > canvas.width + 20) p.x = -20;
+      if (p.y < -20) p.y = canvas.height + 20;
+      if (p.y > canvas.height + 20) p.y = -20;
 
-      if (p.y < -30 || p.life <= 0) {
-        Object.assign(p, createParticle(false));
+      if (p.life <= 0) {
+        Object.assign(p, createParticle());
       }
     }
 

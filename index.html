@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aesthetic Dragon Website</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Base Page Styling */
+    body {
+      margin: 0;
+      background-color: #0b0c10; /* Dark aesthetic background */
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* Fullscreen Animation Overlay */
+    #intro-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 1s ease-out, visibility 1s;
+    }
+
+    /* Fits video to screen; works in both portrait and landscape */
+#dragon-video {
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  object-position: 30% center; /* Balances left wing and head while filling top/bottom completely */
+}
+
+    #intro-overlay.fade-out {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    /* Main Content Visibility Toggle */
+    .hidden {
+      opacity: 0;
+      transition: opacity 1s ease-in;
+    }
+
+    .visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Intro Screen Overlay -->
+  <div id="intro-overlay">
+    <video id="dragon-video" playsinline>
+      <source src="dragon_intro.mp4" type="video/mp4">
+      <source src="dragon_intro.webm" type="video/webm">
+    </video>
+  </div>
+
+  <!-- Main Website Content -->
+  <main id="main-content" class="hidden">
+    <header>
+      <h1>Welcome to the Symposium</h1>
+    </header>
+    <!-- Your main aesthetic content here -->
+  </main>
+
+  <script>
+    const dragonVideo = document.getElementById('dragon-video');
+    const introOverlay = document.getElementById('intro-overlay');
+    const mainContent = document.getElementById('main-content');
+
+    // Attempt autoplay with sound on load
+    dragonVideo.muted = false;
+    
+    dragonVideo.play().catch(() => {
+      // If browser blocks audio autoplay, fallback to muted play
+      dragonVideo.muted = true;
+      dragonVideo.play();
+    });
+
+    // Unmute immediately on the first user tap/click anywhere on screen
+    const enableAudio = () => {
+      dragonVideo.muted = false;
+      document.removeEventListener('click', enableAudio);
+      document.removeEventListener('touchstart', enableAudio);
+    };
+
+    document.addEventListener('click', enableAudio);
+    document.addEventListener('touchstart', enableAudio);
+
+    // Trigger transition when the dragon flame animation finishes
+    dragonVideo.addEventListener('ended', () => {
+      // Fade out intro overlay
+      introOverlay.classList.add('fade-out');
+      
+      // Reveal main page
+      mainContent.classList.remove('hidden');
+      mainContent.classList.add('visible');
+      
+      // Clean up overlay DOM after fade finishes
+      setTimeout(() => {
+        introOverlay.style.display = 'none';
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

@@ -30,7 +30,6 @@
       visibility: hidden;
     }
 
-    /* Blurred backdrop — fills screen, heavily blurred + darkened */
     #dragon-video-bg {
       position: absolute;
       inset: 0;
@@ -38,10 +37,9 @@
       height: 100%;
       object-fit: cover;
       filter: blur(50px) brightness(0.55) saturate(1.3);
-      transform: scale(1.3); /* hides blur edge artifacts, pulls in more glow */
+      transform: scale(1.3);
     }
 
-    /* Sharp foreground video */
     #dragon-video {
       position: absolute;
       top: 50%;
@@ -50,42 +48,36 @@
       height: auto;
       transform: translate(-50%, -50%);
       object-fit: contain;
-
-      /* KEY FIX: fade top/bottom edges to transparent so it blends
-         into the blurred background instead of a hard cut line */
       -webkit-mask-image: linear-gradient(
-        to bottom,
-        transparent 0%,
-        black 12%,
-        black 88%,
-        transparent 100%
+        to bottom, transparent 0%, black 12%, black 88%, transparent 100%
       );
       mask-image: linear-gradient(
-        to bottom,
-        transparent 0%,
-        black 12%,
-        black 88%,
-        transparent 100%
+        to bottom, transparent 0%, black 12%, black 88%, transparent 100%
       );
     }
 
     @media (orientation: landscape) {
-      #dragon-video {
-        width: auto;
-        height: 100%;
-      }
+      #dragon-video { width: auto; height: 100%; }
     }
 
-    /* Extra vignette to help hide any remaining seam and add mood */
+    /* Ember particle canvas — sits above video, below vignette */
+    #ember-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      mix-blend-mode: screen; /* makes embers glow additively over the video */
+    }
+
     #vignette {
       position: absolute;
       inset: 0;
       pointer-events: none;
       background: radial-gradient(
-        ellipse at center,
-        transparent 40%,
-        rgba(0,0,0,0.55) 100%
+        ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%
       );
+      z-index: 2;
     }
 
     .hidden { opacity: 0; transition: opacity 1s ease-in; }
@@ -101,6 +93,7 @@
       <source src="dragon_intro.mp4" type="video/mp4">
       <source src="dragon_intro.webm" type="video/webm">
     </video>
+    <canvas id="ember-canvas"></canvas>
     <div id="vignette"></div>
   </div>
 
@@ -123,8 +116,6 @@
     });
     dragonVideoBg.play();
 
-    // Keep bg video frame-synced to foreground video
-    // so the blur always matches the visible action
     dragonVideo.addEventListener('timeupdate', () => {
       if (Math.abs(dragonVideoBg.currentTime - dragonVideo.currentTime) > 0.15) {
         dragonVideoBg.currentTime = dragonVideo.currentTime;
@@ -145,6 +136,101 @@
       mainContent.classList.add('visible');
       setTimeout(() => { introOverlay.style.display = 'none'; }, 1000);
     });
+
+    /* ---------------- Ember / Ash Particle System ---------------- */
+    const canvas = document.getElementById('ember-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let animId;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+
+    // Warm gold/amber/orange palette only — matches the fire reference
+    const emberColors = [
+      'rgba(255, 200, 120,',   // pale gold
+      'rgba(255, 160, 60,',    // amber
+      'rgba(255, 120, 40,',    // orange
+      'rgba(255, 225, 160,',   // bright gold glow
+    ];
+
+    function createParticle() {
+      const size = rand(1, 3.5);
+      return {
+        x: rand(0, canvas.width),
+        y: canvas.height + rand(0, 100),
+        size,
+        baseSize: size,
+        speedY: rand(0.3, 1.4),
+        drift: rand(-0.4, 0.4),
+        wobble: rand(0, Math.PI * 2),
+        wobbleSpeed: rand(0.01, 0.03),
+        color: emberColors[Math.floor(rand(0, emberColors.length))],
+        opacity: rand(0.4, 1),
+        flicker: rand(0.01, 0.04),
+        life: rand(0.7, 1)
+      };
+    }
+
+    const PARTICLE_COUNT = 70;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const p = createParticle();
+      p.y = rand(0, canvas.height); // spread initial particles through the frame
+      particles.push(p);
+    }
+
+    function drawParticle(p) {
+      const glowSize = p.size * 4;
+      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowSize);
+      gradient.addColorStop(0, p.color + p.opacity + ')');
+      gradient.addColorStop(0.4, p.color + (p.opacity * 0.4) + ')');
+      gradient.addColorStop(1, p.color + '0)');
+
+      ctx.beginPath();
+      ctx.fillStyle = gradient;
+      ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
+      ctx.fill();
+
+      // bright core
+      ctx.beginPath();
+      ctx.fillStyle = p.color + p.opacity + ')';
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function updateParticle(p) {
+      p.y -= p.speedY;
+      p.wobble += p.wobbleSpeed;
+      p.x += Math.sin(p.wobble) * 0.6 + p.drift;
+      p.opacity += (Math.random() - 0.5) * p.flicker; // gentle flicker
+      p.opacity = Math.max(0.2, Math.min(1, p.opacity));
+
+      // fade out as it nears top
+      const fadeStart = canvas.height * 0.15;
+      if (p.y < fadeStart) {
+        p.life -= 0.01;
+      }
+
+      if (p.y < -20 || p.life <= 0) {
+        Object.assign(p, createParticle());
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        updateParticle(p);
+        drawParticle(p);
+      });
+      animId = requestAnimationFrame(animate);
+    }
+    animate();
   </script>
 </body>
 </html>

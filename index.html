@@ -37,17 +37,19 @@
   object-fit: cover;
   object-position: center;
 }
-    @media screen and (max-width: 768px) and (orientation: portrait) {
+/* Mobile Portrait Fix */
+@media screen and (max-width: 768px) and (orientation: portrait) {
   #intro-overlay {
     background-color: #101114; /* Matches the video's dark background tint */
   }
 
-      #dragon-video {
+  #dragon-video {
     width: 100vw;
     height: 100dvh; /* Uses dynamic viewport height for mobile browsers */
     object-fit: contain; /* Prevents cropping: keeps both wings and head visible */
     object-position: center;
   }
+}
     #intro-overlay.fade-out {
       opacity: 0;
       visibility: hidden;

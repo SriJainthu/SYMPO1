@@ -180,6 +180,7 @@
     });
 
     function enterWithSound() {
+     e.preventDefault();
       hasEntered = true;
       dragonVideo.muted = false;
       dragonVideo.currentTime = 0;
@@ -187,6 +188,7 @@
       tapToEnter.classList.add('hide');
       setTimeout(() => { tapToEnter.style.display = 'none'; }, 500);
     }
+    tapToEnter.addEventListener('touchstart', enterWithSound, { passive: false });
     tapToEnter.addEventListener('click', enterWithSound);
     tapToEnter.addEventListener('touchstart', enterWithSound);
 
